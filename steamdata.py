@@ -1,28 +1,28 @@
 import os
 
 from dotenv import load_dotenv
-from rich import print
 from steam_web_api import Steam
 
-load_dotenv()
-KEY = os.environ.get("STEAM_API_KEY")
-steam = Steam(KEY)
+
+def empty_key_guard():
+    load_dotenv(override=True)
+    key = os.environ.get("STEAM_API_KEY")
+    return Steam(key)
 
 
-def fetch_steam_data(username: str) -> list:
-    username = "arconaute"
+def fetch_steam_user_data() -> list:
+    steam = empty_key_guard()
+    username = os.environ.get("STEAM_VANITY_NAME")
     user_data = steam.users.search_user(username)
     if user_data and "player" in user_data:
-        player = user_data["player"]
-
-        print("\n[bold green]User Found![/bold green]")
-        print(f"Name:     [white]{player.get('personaname')}[/white]")
-        print(f"SteamID:  [white]{player.get('steamid')}[/white]")
-        print(f"Profile:  [blue]{player.get('profileurl')}[/blue]")
+        return user_data["player"]
     else:
         raise Exception("Player not found")
 
-    library = steam.users.get_owned_games(f"{player.get('steamid')}")
+
+def fetch_steam_library_data(steamid):
+    steam = empty_key_guard()
+    library = steam.users.get_owned_games(steamid)
     games_list = library.get("games", [])
     skimmed_library = [
         {

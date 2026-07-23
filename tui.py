@@ -1,9 +1,15 @@
-from textual.app import App, ComposeResult
-from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.widgets import DataTable, Footer, Header, Static
+import asyncio
+import os
 
-from database import query_all_games
-from steamdata import fetch_steam_user_data
+from dotenv import load_dotenv
+from textual import work
+from textual.app import App
+from textual.widgets import DataTable, Footer, Header, RichLog, Static
+
+from database import database_init, query_all_games, save_game_database
+from fetchgamedata import fetch_game_data
+from firsttimesetup import FirstTimeSetup
+from steamdata import fetch_steam_library_data, fetch_steam_user_data
 
 
 class HelpMeClearMyBacklog(App):
@@ -30,12 +36,24 @@ class HelpMeClearMyBacklog(App):
         yield Static(id="steam-hltb-stats")
         yield DataTable()
         yield Footer()
+        yield RichLog(id="sync_log", highlight=True, markup=True)
 
     async def on_mount(self):
+        # .env contents check
+        load_dotenv()
+        api_key = os.environ.get("STEAM_API_KEY")
+        if not api_key:
+            self.push_screen(FirstTimeSetup(), self.database_sync)
+        else:
+            self.database_sync()
+
+    async def build_library_database(self):
+        username = os.environ.get("STEAM_VANITY_NAME")
+        player = fetch_steam_user_data()
+
         tui_games_list = await query_all_games()
         table = self.query_one(DataTable)
         steam_hltb_panel = self.query_one("#steam-hltb-stats", Static)
-        player = fetch_steam_user_data("arconaute")
 
         total_games = len(tui_games_list)
         total_hours_main = sum(game.get("hltb_main") for game in tui_games_list)
@@ -63,6 +81,7 @@ class HelpMeClearMyBacklog(App):
         table.cursor_type = "row"
         table.zebra_stripes = True
 
+    # Table sorting logic
     def sort_reverse(self, sort_type):
         reverse = sort_type in self.current_sorts
         if reverse:
@@ -110,6 +129,41 @@ class HelpMeClearMyBacklog(App):
             self.sort_by_hltb_main(event.column_key)
         elif clicked_column == "HLTB Completionist (hrs)":
             self.sort_by_hltb_completionist(event.column_key)
+
+    # Moved from main.py due to .env file issues
+    @work
+    async def database_sync(self):
+        log = self.query_one("#sync_log", RichLog)
+        load_dotenv(override=True)
+        username = os.environ.get("STEAM_VANITY_NAME")
+        log.write("[bold blue]Hello from Help Me Clear My Backlog![/bold blue]")
+        log.write("[italics]Made by Kangy[/italics]")
+
+        await database_init()
+
+        log.write("Pulling Steam Library...")
+        player_data = fetch_steam_user_data()
+        steam_id = player_data["steamid"]
+        library = fetch_steam_library_data(steam_id)
+        log.write("Steam library successfully pulled!")
+
+        log.write("Searching HLTB for game...")
+        async_thing = asyncio.Semaphore(10)
+        hltb_pulls = [fetch_game_data(game, async_thing, log.write) for game in library]
+        library_data = await asyncio.gather(*hltb_pulls)
+        log.write("Games Found!")
+
+        log.write(
+            "Saving to Game Database\nThis may take a minute depending on your library size"
+        )
+        for game in library_data:
+            await save_game_database(game)
+
+        log.write("Sync complete!")
+        log.write("Loading your library...")
+
+        log.display = False
+        await self.build_library_database()
 
 
 if __name__ == "__main__":

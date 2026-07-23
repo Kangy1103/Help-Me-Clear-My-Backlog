@@ -35,14 +35,14 @@ async def game_query(appid: int):
     async with aiosqlite.connect(game_database) as gdb:
         gdb.row_factory = aiosqlite.Row
         async with gdb.execute(
-            """SELECT * FROM game_database WHERE appid = ?""", (appid)
+            """SELECT * FROM game_database WHERE appid = ?""", (appid,)
         ) as cursor:
             row = await cursor.fetchone()
             return dict(row) if row else None
 
 
-async def game_database(game: dict):
-    async with aiosqlite.connect("game_database.db") as gdb:
+async def save_game_database(game: dict):
+    async with aiosqlite.connect(game_database) as gdb:
         await gdb.execute(
             """INSERT OR REPLACE INTO game_database (
                 appid, name, playtime, playtime_2weeks, playtime_windows,
@@ -65,4 +65,12 @@ async def game_database(game: dict):
                 game.get("is_completed", 0),
             ),
         )
-        await db.commit()
+        await gdb.commit()
+
+
+async def query_all_games():
+    async with aiosqlite.connect(game_database) as gdb:
+        gdb.row_factory = aiosqlite.Row
+        async with gdb.execute("""SELECT * FROM game_database""") as cursor:
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]

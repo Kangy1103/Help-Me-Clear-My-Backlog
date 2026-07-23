@@ -2,7 +2,7 @@ import webbrowser
 
 import httpx
 from dotenv import set_key
-from textual.app import App, ComposeResult
+from textual.app import ComposeResult
 from textual.containers import Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Button, ContentSwitcher, Input, Label
@@ -12,6 +12,7 @@ env = ".env"
 
 class FirstTimeSetup(ModalScreen):
 
+    # This all needs theming, looks awful raw
     def compose(self) -> ComposeResult:
         with ContentSwitcher(initial="steam-api-config"):
             with Vertical(id="steam-api-config"):
@@ -51,7 +52,7 @@ class FirstTimeSetup(ModalScreen):
                     placeholder="Steam vanity name goes here...", id="steam_name_input"
                 )
                 yield Button("Validate Profile", id="name_validate_btn")
-                # Validate Profile container (hidden)
+                # Container that shows when validating profile (hidden until needed)
                 with Vertical(id="pull_steam_profile"):
                     yield Label("", id="steam_name")
                     yield Label("", id="steam_id")
@@ -76,6 +77,7 @@ class FirstTimeSetup(ModalScreen):
                 if response.status_code == 200:
                     self.query_one("#next_btn").disabled = False
                     set_key(env, "STEAM_API_KEY", api_key)
+                    self.notify("Steam API is valid!")
                 else:
                     self.notify("Steam API key not valid!", severity="error")
         # event handler for next button after api key validation
@@ -86,9 +88,7 @@ class FirstTimeSetup(ModalScreen):
         # before passing the variable to the .env file
         elif event.button.id == "name_validate_btn":
             steam_vanity_name = self.query_one("#steam_name_input").value
-            api_key = self.query_one(
-                "#api_input"
-            ).value  # Doobious and whether this will still be accessible
+            api_key = self.query_one("#api_input").value
             async with httpx.AsyncClient() as hmcmb:
                 steam_vanity_url = f"https://api.steampowered.com/ISteamUser/ResolveVanityURL/v0001/?key={api_key}&vanityurl={steam_vanity_name}"
                 steam_vanity_result = await hmcmb.get(steam_vanity_url)
@@ -96,6 +96,7 @@ class FirstTimeSetup(ModalScreen):
 
                 if steam_vanity_data.get("response", {}).get("success") == 1:
                     steam_id = steam_vanity_data["response"]["steamid"]
+                    set_key(env, "STEAM_ID", steam_id)
 
                     # Pull the profile
                     steam_summary_url = f"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key={api_key}&steamids={steam_id}"
@@ -127,17 +128,3 @@ class FirstTimeSetup(ModalScreen):
             steam_vanity_name = self.query_one("#steam_name_input").value
             set_key(env, "STEAM_VANITY_NAME", steam_vanity_name)
             self.dismiss()
-
-
-class DummyApp(App[None]):
-    def compose(self) -> ComposeResult:
-        yield Button("Open modal.", id="open_modal")
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "open_modal":
-            self.push_screen(FirstTimeSetup())
-
-
-app = DummyApp()
-if __name__ == "__main__":
-    app.run()
