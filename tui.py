@@ -132,7 +132,7 @@ class HelpMeClearMyBacklog(App):
 
     # Moved from main.py due to .env file issues
     @work
-    async def database_sync(self):
+    async def database_sync(self, *args):
         log = self.query_one("#sync_log", RichLog)
         load_dotenv(override=True)
         username = os.environ.get("STEAM_VANITY_NAME")

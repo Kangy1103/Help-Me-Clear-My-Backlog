@@ -9,6 +9,12 @@ from textual.widgets import Button, ContentSwitcher, Input, Label
 
 env = ".env"
 
+# This needs some error checking for if this was cancelled part way through
+# Specifically i found that validating the API key writes to the file like it should
+# but if I restart the app, the first time setup fires again due to the missing steam name key
+# This causes the app to crash as it found the api key and not the steam name and didn't know
+# what to do in this situation
+
 
 class FirstTimeSetup(ModalScreen):
 
